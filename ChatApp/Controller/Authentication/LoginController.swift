@@ -7,6 +7,8 @@
 //
 
 import UIKit
+import Firebase
+import JGProgressHUD
 
 protocol AuthenticationControllerProtocol {
     func checkFormStatus()
@@ -49,6 +51,7 @@ class LoginController: UIViewController {
     private let emailTextField: CustomTextField = {
         let tf = CustomTextField(placeholder: "Email")
         tf.textColor = .white
+        tf.autocapitalizationType = .none
         return tf
     }()
     
@@ -56,6 +59,7 @@ class LoginController: UIViewController {
         let tf = CustomTextField(placeholder: "Password")
         tf.isSecureTextEntry = true
         tf.textColor = .white
+        tf.autocapitalizationType = .none
         return tf
     }()
     
@@ -76,12 +80,27 @@ class LoginController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         configureUI()
+        configureNotificationObservers()
     }
     
     // MARK : - Selectors
     
     @objc func handleLogin() {
-        print("Sign in...")
+        guard let email = emailTextField.text else { return }
+        guard let password = passwordTextField.text else { return }
+        
+        showLoader(true,withText: "Loggin in")
+
+        AuthService.shared.logUserIn(withEmail: email, password: password) { (result, error) in
+            if let error = error {
+                print("DEBUG: Failed to login with error \(error.localizedDescription)")
+                self.showLoader(false)
+                return
+            }
+            
+            self.showLoader(false)
+            self.dismiss(animated: true, completion: nil)
+        }
     }
     
     @objc func handleShowSignUp() {
@@ -97,6 +116,18 @@ class LoginController: UIViewController {
         }
         
         checkFormStatus()
+    }
+    
+    @objc func keyboardWillShow() {
+        if view.frame.origin.y == 0 {
+            self.view.frame.origin.y -= 88
+        }
+    }
+    
+    @objc func keyboardWillHide() {
+        if view.frame.origin.y != 0 {
+            self.view.frame.origin.y = 0
+        }
     }
     
     // MARK : - Helpers
@@ -120,11 +151,20 @@ class LoginController: UIViewController {
         
         view.addSubview(dontHaveAccountButton)
         dontHaveAccountButton.anchor(left: view.leftAnchor, bottom: view.safeAreaLayoutGuide.bottomAnchor,right: view.rightAnchor,paddingLeft: 32,paddingRight: 32)
-        
+    }
+    
+    func configureNotificationObservers() {
         emailTextField.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
         passwordTextField.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
+
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide), name: UIResponder.keyboardWillHideNotification, object: nil)
     }
-}
+        
+    }
+
+
 
 extension LoginController: AuthenticationControllerProtocol {
     func checkFormStatus() {

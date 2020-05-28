@@ -7,20 +7,21 @@
 //
 
 import UIKit
-
-
+import Firebase
 
 class RegistrationController: UIViewController {
     
     // MARK: - Properties
     
     private var viewModel = RegistrationViewModel()
+    private var profileImage: UIImage?
     
     private let plusPhotoButton: UIButton = {
         let button = UIButton(type: .system)
         button.setImage(#imageLiteral(resourceName: "plus_photo"), for: .normal)
         button.tintColor = .white
         button.clipsToBounds = true
+        button.imageView?.contentMode = .scaleAspectFill
         button.addTarget(self, action: #selector(handleSelectPhoto), for: .touchUpInside)
         return button
     }()
@@ -42,19 +43,28 @@ class RegistrationController: UIViewController {
     }()
     
     private let emailTextField: UITextField = {
-        return CustomTextField(placeholder: "Email")
+        let tf = CustomTextField(placeholder: "Email")
+        tf.autocapitalizationType = .none
+        return tf
     }()
     
     private let fullnameTextField: UITextField = {
-        return CustomTextField(placeholder: "Fullname")
+        let tf = CustomTextField(placeholder: "Fullname")
+        tf.autocapitalizationType = .none
+        return tf
     }()
     
     private let usernameTextField: UITextField = {
-        return CustomTextField(placeholder: "Username")
+        let tf = CustomTextField(placeholder: "Username")
+        tf.autocapitalizationType = .none
+        return tf
     }()
     
     private let passwordTextField: UITextField = {
-        return CustomTextField(placeholder: "Password")
+        let tf = CustomTextField(placeholder: "Password")
+        tf.isSecureTextEntry = true
+        tf.text?.lowercased()
+        return tf
     }()
     
     private let signUpButton: UIButton = {
@@ -90,10 +100,27 @@ class RegistrationController: UIViewController {
         configureNotificationObservers()
     }
     
-    // MARK : - Selectors
+    // MARK: - Selectors
     
     @objc func handleSignUp() {
-        print("Sign up button clicked..")
+        guard let email = emailTextField.text else { return }
+        guard let password = passwordTextField.text else { return }
+        guard let fullname = fullnameTextField.text else { return }
+        guard let username = usernameTextField.text?.lowercased() else { return }
+        guard let profileImage = profileImage else { return }
+        
+        let credentials = RegistrationCredentials(email: email, password: password, username: username, fullname: fullname, profileImage: profileImage)
+        
+        showLoader(true,withText: "Signing You Up")
+        
+        AuthService.shared.createUser(credentials: credentials) { (err) in
+            if let error = err {
+                print("ERROR: \(error.localizedDescription)")
+                self.showLoader(false)
+            }
+            self.showLoader(false)
+            self.dismiss(animated: true, completion: nil)
+        }
     }
     
     @objc func handleHaveAccount() {
@@ -118,6 +145,18 @@ class RegistrationController: UIViewController {
         }
         
         checkFormStatus()
+    }
+    
+    @objc func keyboardWillShow() {
+        if view.frame.origin.y == 0 {
+            self.view.frame.origin.y -= 88
+        }
+    }
+    
+    @objc func keyboardWillHide() {
+        if view.frame.origin.y != 0 {
+            self.view.frame.origin.y = 0
+        }
     }
     
     // MARK: - Helpers
@@ -151,6 +190,9 @@ class RegistrationController: UIViewController {
         usernameTextField.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
         passwordTextField.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
         fullnameTextField.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide), name: UIResponder.keyboardWillHideNotification, object: nil)
     }
     
 
@@ -161,7 +203,7 @@ class RegistrationController: UIViewController {
 extension RegistrationController: UIImagePickerControllerDelegate & UINavigationControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         let image = info[.originalImage] as? UIImage
-        
+        profileImage = image
         plusPhotoButton.layer.cornerRadius = 200 / 2
         plusPhotoButton.layer.masksToBounds = true
         plusPhotoButton.imageView?.contentMode = .scaleAspectFill
