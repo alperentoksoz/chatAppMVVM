@@ -17,6 +17,10 @@ class ConversationsController: UIViewController {
     
     private var users = [User]()
     
+    private var conversations = [Conversation]()
+    private var conversationDictionary = [String: Conversation]()
+
+    
     private let tableView = UITableView()
     
     private let newMessageButton: UIButton = {
@@ -36,6 +40,11 @@ class ConversationsController: UIViewController {
         super.viewDidLoad()
         configureUI()
         authenticateUser()
+        fetchConversations()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        configureNavigationBar(withTitle: Auth.auth().currentUser?.email ?? "", prefersLargeTitles: true)
     }
     
     // MARK: - Selectors
@@ -49,16 +58,33 @@ class ConversationsController: UIViewController {
     }
     
     @objc func showProfile() {
-        logout()
+        let controller = ProfileController(style: .insetGrouped)
+        controller.delegate = self
+        let nav = UINavigationController(rootViewController: controller)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav,animated: true,completion: nil)
     }
     
     // MARK: API
     
+    func fetchConversations() {
+        showLoader(true)
+        Service.fetchConversations { (conversations) in
+            conversations.forEach { (conversation) in
+                let message = conversation.message
+                self.conversationDictionary[message.chartPartnerId] = conversation
+            }
+            
+            self.showLoader(false)
+            
+            self.conversations = Array(self.conversationDictionary.values)
+            self.tableView.reloadData()
+        }
+    }
+    
     func authenticateUser() {
         if Auth.auth().currentUser?.uid == nil {
             presentLoginScreen()
-        } else {
-            
         }
     }
     
@@ -76,6 +102,7 @@ class ConversationsController: UIViewController {
     func presentLoginScreen() {
         DispatchQueue.main.async {
             let controller = LoginController()
+            controller.delegate = self
             let nav = UINavigationController(rootViewController: controller)
             nav.modalPresentationStyle = .fullScreen
             self.present(nav,animated: true,completion: nil)
@@ -84,7 +111,7 @@ class ConversationsController: UIViewController {
     
     func configureUI() {
         view.backgroundColor = .white
-        configureNavigationBar()
+
         configureTableView()
         
         let image = UIImage(systemName: "person.circle.fill")
@@ -97,7 +124,7 @@ class ConversationsController: UIViewController {
     func configureTableView() {
         tableView.backgroundColor = .white
         tableView.rowHeight = 80
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: reuseIdentifier)
+        tableView.register(ConversationsCell.self, forCellReuseIdentifier: reuseIdentifier)
         tableView.tableFooterView = UIView()
         tableView.delegate = self
         tableView.dataSource = self
@@ -105,37 +132,19 @@ class ConversationsController: UIViewController {
         view.addSubview(tableView)
         tableView.frame = view.frame
     }
-    
-    func configureNavigationBar() {
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-        appearance.backgroundColor = .systemPurple
-        
-        navigationController?.navigationBar.standardAppearance = appearance
-        navigationController?.navigationBar.compactAppearance = appearance
-        navigationController?.navigationBar.scrollEdgeAppearance = appearance
-        
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.title = "Messages"
-        navigationController?.navigationBar.tintColor = .white
-        navigationController?.navigationBar.isTranslucent = true
-        
-        navigationController?.navigationBar.overrideUserInterfaceStyle = .dark
-    }
 }
 
     // MARK: - UITableViewDataSource
 
 extension ConversationsController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return 2
+        return conversations.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier, for: indexPath)
+        let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier, for: indexPath) as! ConversationsCell
         
-        cell.textLabel?.text = "Test cell"
+        cell.conversation = conversations[indexPath.row]
         
         return cell
     }
@@ -143,7 +152,9 @@ extension ConversationsController: UITableViewDataSource {
 
 extension ConversationsController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        print(indexPath.row)
+        let user = conversations[indexPath.row].user
+        let controller = ChatController(user: user)
+        navigationController?.pushViewController(controller,animated: true)
     }
     
 }
@@ -151,9 +162,31 @@ extension ConversationsController: UITableViewDelegate {
 extension ConversationsController: NewMessageControllerDelegate {
     func controller(_ controller: NewMessageController, wantstoStartChatWith user: User) {
         print("DEBUG: Here is ConversationController at conform protocol \(user.username)")
-        controller.dismiss(animated: true, completion: nil)
+        dismiss(animated: true, completion: nil)
         let chat = ChatController(user: user)
         navigationController?.pushViewController(chat,animated: true)
     }
     
+}
+
+// MARK: - ProfileControllerDelegate
+
+extension ConversationsController: ProfileControllerDelegate {
+    func handleLogout() {
+        print("DEBUG : ConversationsController: ProfileControllerDelegate HandleLogout")
+        logout()
+    }
+
+}
+
+// MARK: - AuthenticationDelegate
+
+extension ConversationsController: AuthenticationDelegate {
+    func authenticationComplete() {
+        dismiss(animated: true, completion: nil)
+        print("DEBUG :Here extension ConversationsController: AuthenticationDelegate  ")
+        configureUI()
+        fetchConversations()
+    }
+
 }

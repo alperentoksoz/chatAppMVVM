@@ -21,7 +21,6 @@ class ChatController: UICollectionViewController {
     private lazy var customInputView: CustomInputAccessoryView = {
         let iv = CustomInputAccessoryView(frame: CGRect(x: 0, y: 0, width: view.frame.width - 200 , height: 300))
         iv.delegate = self
-        
         return iv
     }()
     
@@ -39,6 +38,7 @@ class ChatController: UICollectionViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         configureUI()
+        fetchMessages()
         print("DEBUG: Here is chat controller: \(user.username)")
     }
     
@@ -52,6 +52,19 @@ class ChatController: UICollectionViewController {
     
     // MARK: - Selectors
     
+    // MARK: - API
+    
+    func fetchMessages() {
+        showLoader(true)
+        Service.fetchMessages(forUser: user) { (messages) in
+            self.showLoader(false)
+            
+            self.messages = messages
+            self.collectionView.reloadData()
+            self.collectionView.scrollToItem(at: [0,self.messages.count], at: .bottom, animated: true)
+        }
+    }
+    
     // MARK: - Helpers
     
     func configureUI() {
@@ -60,6 +73,8 @@ class ChatController: UICollectionViewController {
         
         collectionView.register(MessageCell.self, forCellWithReuseIdentifier: reuseIdentifier)
         collectionView.alwaysBounceVertical = true
+        
+        collectionView.keyboardDismissMode = .interactive
     }
 }
 
@@ -70,6 +85,7 @@ extension ChatController {
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseIdentifier, for: indexPath) as! MessageCell
         cell.message = messages[indexPath.row]
+        cell.message?.user = user
         return cell
     }
 }
@@ -80,19 +96,29 @@ extension ChatController: UICollectionViewDelegateFlowLayout {
     }
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        return CGSize(width: view.frame.width, height: 50)
+        
+        //Mesaj uzunluğuna göre cell height ayarlama yapıyoruz.
+        let frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 50)
+        let estimatedSizeCell = MessageCell(frame: frame)
+        estimatedSizeCell.message = messages[indexPath.row]
+        estimatedSizeCell.layoutIfNeeded()
+        
+        let targetSize = CGSize(width: view.frame.width, height: 1000)
+        let estimatedSize = estimatedSizeCell.systemLayoutSizeFitting(targetSize)
+        
+        return .init(width: view.frame.width, height: estimatedSize.height)
     }
 }
 
 extension ChatController: CustomInputAccessoryViewDelegate {
     func inputView(_ inputView: CustomInputAccessoryView, wantsToSend message: String) {
-        inputView.messageInputTextView.text = nil
-        
-        fromCurrentUser.toggle()
-        let message = Message(text: message, isFromCurrentUser: fromCurrentUser)
-        messages.append(message)
-        collectionView.reloadData()
+
+        Service.uploadMessage(message, to: user) { (error) in
+            if let error = error {
+                self.showError(error.localizedDescription)
+                return
+            }
+            inputView.clearMessageText()
+        }
     }
-    
-    
 }
