@@ -115,7 +115,6 @@ extension ProfileController: ProfileHeaderDelegate {
 
 extension ProfileController: ProfileFooterDelegate {
     func handleLogout() {
-        // Eğer profilecontroller dissmis edilmez ise "whose view is not in the window hierarchy!" hatası veriyor.
         delegate?.handleLogout()
         let alert = UIAlertController(title: nil, message: "Are you sure you want to logout?", preferredStyle: .actionSheet)
 
